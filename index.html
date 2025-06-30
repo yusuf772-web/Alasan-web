@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Alasan Izin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .progress-bar-fill {
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+        <h1 class="text-2xl font-bold text-center text-cyan-400">aku mau ijin...</h1>
+
+        <div class="space-y-4">
+            <div>
+                <label for="reasonInput" class="block text-sm font-medium text-gray-300 mb-2">Masukkan alasan kamu ijin apa?</label>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="reasonInput" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Contoh: tidak masuk kerja...">
+                    <button id="generateBtn" class="bg-cyan-500 hover:bg-cyan-600 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-play"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="loadingIndicator" class="hidden text-center py-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto"></div>
+                <p class="mt-2 text-gray-400">Sedang mencari alasan...</p>
+            </div>
+
+            <div id="resultContainer" class="hidden space-y-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-300">Hasilnya:</h2>
+                    <div id="autoAnswer" class="bg-gray-700 rounded-lg p-4 mt-2 min-h-[100px] text-gray-200 whitespace-pre-wrap"></div>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-medium text-gray-300">Seberapa aneh alasan kamu?</h3>
+                    <div class="w-full bg-gray-700 rounded-full h-4 mt-2 overflow-hidden">
+                        <div id="weirdnessBar" class="bg-gradient-to-r from-green-400 to-cyan-500 h-4 rounded-full progress-bar-fill" style="width: 0%;"></div>
+                    </div>
+                    <p id="weirdnessText" class="text-right text-sm mt-1 text-cyan-400 font-semibold">0%</p>
+                </div>
+            </div>
+            
+             <div id="errorContainer" class="hidden bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
+                <p id="errorMessage"></p>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="mt-8">
+        <p id="copyright" class="text-xs text-gray-500"></p>
+    </footer>
+
+    <script>
+        const reasonInput = document.getElementById('reasonInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultContainer = document.getElementById('resultContainer');
+        const autoAnswer = document.getElementById('autoAnswer');
+        const weirdnessBar = document.getElementById('weirdnessBar');
+        const weirdnessText = document.getElementById('weirdnessText');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        const copyright = document.getElementById('copyright');
+
+        // Set copyright year dynamically
+        copyright.textContent = `Copyright © ${new Date().getFullYear()} @yusufmusabbih`;
+
+        generateBtn.addEventListener('click', generateExcuse);
+        reasonInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateExcuse();
+            }
+        });
+
+        async function generateExcuse() {
+            const userInput = reasonInput.value.trim();
+            if (!userInput) {
+                showError("Harap masukkan alasan terlebih dahulu.");
+                return;
+            }
+
+            // Show loading and hide previous results/errors
+            loadingIndicator.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            generateBtn.disabled = true;
+
+            const prompt = `Anda adalah seorang ahli pembuat alasan yang kreatif dan lucu. Buatkan sebuah alasan izin yang meyakinkan namun sedikit aneh untuk keperluan: "${userInput}".
+
+Setelah membuat alasan, berikan rating tingkat keanehan alasan tersebut dalam skala 0 sampai 100.
+
+Berikan jawaban HANYA dalam format JSON dengan struktur berikut:
+{
+  "alasan": "...",
+  "tingkat_keanehan": ...
+}
+
+Pastikan properti JSON adalah "alasan" dan "tingkat_keanehan".`;
+            
+            try {
+                 const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                 const payload = { 
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "alasan": { "type": "STRING" },
+                                "tingkat_keanehan": { "type": "NUMBER" }
+                            },
+                            required: ["alasan", "tingkat_keanehan"]
+                        }
+                    }
+                 };
+                 
+                 const apiKey = ""; // API key is handled by the environment
+                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                 const response = await fetch(apiUrl, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify(payload)
+                 });
+
+                 if (!response.ok) {
+                     throw new Error(`API call failed with status: ${response.status}`);
+                 }
+
+                 const result = await response.json();
+                 
+                 if (result.candidates && result.candidates.length > 0 &&
+                     result.candidates[0].content && result.candidates[0].content.parts &&
+                     result.candidates[0].content.parts.length > 0) {
+                    
+                     const jsonText = result.candidates[0].content.parts[0].text;
+                     const parsedJson = JSON.parse(jsonText);
+                     
+                     if (parsedJson.alasan && typeof parsedJson.tingkat_keanehan !== 'undefined') {
+                         displayResult(parsedJson.alasan, parsedJson.tingkat_keanehan);
+                     } else {
+                         throw new Error("Struktur JSON dari API tidak valid.");
+                     }
+                 } else {
+                     throw new Error("Respons dari API tidak mengandung konten yang diharapkan.");
+                 }
+
+            } catch (error) {
+                console.error("Error:", error);
+                showError("Maaf, terjadi kesalahan saat membuat alasan. Coba lagi nanti.");
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                generateBtn.disabled = false;
+            }
+        }
+
+        function displayResult(excuse, weirdness) {
+            resultContainer.classList.remove('hidden');
+            
+            // Animate the text display
+            autoAnswer.textContent = '';
+            let i = 0;
+            function typeWriter() {
+                if (i < excuse.length) {
+                    autoAnswer.textContent += excuse.charAt(i);
+                    i++;
+                    setTimeout(typeWriter, 20); // Adjust typing speed here
+                }
+            }
+            typeWriter();
+
+            // Animate the progress bar
+            setTimeout(() => {
+                weirdnessBar.style.width = `${weirdness}%`;
+                weirdnessText.textContent = `${weirdness}% Aneh`;
+            }, 100);
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorContainer.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>
